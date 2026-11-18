@@ -1,0 +1,23 @@
+# F-04 허용 목록: 파일 이름(basename) 기준. '#' 이후는 주석.
+# Ubuntu 22.04 기본 설치에서 SUID/SGID 가 정상인 파일.
+chage
+chfn
+chsh
+crontab
+dbus-daemon-launch-helper
+expiry
+fusermount3
+gpasswd
+mount
+newgrp
+pam_extrausers_chkpwd
+passwd
+pkexec
+polkit-agent-helper-1
+ssh-agent
+ssh-keysign
+su
+sudo
+umount
+unix_chkpwd
+utempter

@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>자산 관리 대장</title>
+<style>
+:root{--bg:#fff;--fg:#1a1a1a;--mut:#666;--line:#d8d8d8;--head:#f2f4f7;--acc:#2457c5}
+@media(prefers-color-scheme:dark){:root{--bg:#16181d;--fg:#e8e8e8;--mut:#9aa0a6;--line:#343942;--head:#20242b;--acc:#7aa2ff}}
+body{font:14px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--fg);margin:0;padding:24px 16px;max-width:1200px;margin-inline:auto}
+h1{font-size:22px;margin:0 0 4px}.mut{color:var(--mut)}
+.scroll{overflow-x:auto;margin:16px 0}
+table{border-collapse:collapse;width:100%;min-width:900px}
+th,td{border:1px solid var(--line);padding:4px 6px;text-align:left}
+th{background:var(--head)}
+input,select{font:inherit;color:inherit;background:transparent;border:1px solid var(--line);border-radius:4px;padding:3px 5px;width:100%;box-sizing:border-box}
+td.imp{font-weight:700;text-align:center}
+button{font:inherit;padding:6px 12px;border:1px solid var(--acc);color:var(--acc);background:transparent;border-radius:6px;cursor:pointer;margin-right:8px}
+code{background:var(--head);padding:1px 4px;border-radius:3px}
+</style>
+</head>
+<body>
+<h1>자산 관리 대장</h1>
+<p class="mut">SPEC.md 1-1 양식(8개 항목). 중요도는 C·I·A(각 1~3)를 합산해 7~9 상, 5~6 중, 3~4 하 (1-2, 1-3).
+가용성(A)은 복구 허용 시간으로 정한다: 3시간 이내 3점, 1일 이내 2점, 7일 이내 1점.
+첫 줄의 용도·망 위치·담당자·점수는 예시 기본값이므로 실제에 맞게 고친다. 입력은 이 브라우저에 저장된다.</p>
+<div class="scroll"><table id="t">
+<thead><tr>
+<th>① 자산 유형</th><th>② 자산명(호스트명)</th><th>③ 용도</th><th>④ 망 위치</th><th>⑤ 운영체제·모델</th><th>⑥ 운영 형태</th><th>⑦ 담당자</th>
+<th>⑧ C</th><th>I</th><th>A</th><th>합계</th><th>중요도</th><th></th></tr></thead>
+<tbody></tbody></table></div>
+<button id="add">행 추가</button><button id="dl">assets.json 내려받기</button>
+<p class="mut">내려받은 <code>assets.json</code> 은 <code>[{"type","name","purpose","zone","os","mode","owner","c","i","a","importance"}]</code> 형식이다(SPEC 4절).</p>
+<script>
+const TYPES=["서버","네트워크 장비","보안 장비","PC","DB","응용 프로그램"];
+const ZONES=["내부망","DMZ","외부망","폐쇄망"];
+const MODES=["Active","Standby"];
+const KEY="assets.v1";
+function grade(s){return s>=7?"상":s>=5?"중":"하"}
+function opts(list,v){return list.map(x=>`<option${x===v?" selected":""}>${x}</option>`).join("")}
+function sc(v){return [1,2,3].map(n=>`<option${n===+v?" selected":""}>${n}</option>`).join("")}
+function row(a){
+  const tr=document.createElement("tr");
+  tr.innerHTML=`<td><select data-k="type">${opts(TYPES,a.type)}</select></td>
+  <td><input data-k="name" value="${esc(a.name)}"></td><td><input data-k="purpose" value="${esc(a.purpose)}"></td>
+  <td><select data-k="zone">${opts(ZONES,a.zone)}</select></td><td><input data-k="os" value="${esc(a.os)}"></td>
+  <td><select data-k="mode">${opts(MODES,a.mode)}</select></td><td><input data-k="owner" value="${esc(a.owner)}" placeholder="이름(부서)"></td>
+  <td><select data-k="c">${sc(a.c)}</select></td><td><select data-k="i">${sc(a.i)}</select></td><td><select data-k="a">${sc(a.a)}</select></td>
+  <td class="sum"></td><td class="imp"></td><td><button class="rm" type="button">삭제</button></td>`;
+  tr.addEventListener("input",refresh);tr.querySelector(".rm").onclick=()=>{tr.remove();refresh()};
+  return tr;
+}
+function esc(s){return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+function read(){
+  return [...document.querySelectorAll("#t tbody tr")].map(tr=>{
+    const o={};tr.querySelectorAll("[data-k]").forEach(e=>o[e.dataset.k]=e.value);
+    o.c=+o.c;o.i=+o.i;o.a=+o.a;o.importance=grade(o.c+o.i+o.a);return o;
+  });
+}
+function refresh(){
+  document.querySelectorAll("#t tbody tr").forEach(tr=>{
+    const g=k=>+tr.querySelector(`[data-k=${k}]`).value,s=g("c")+g("i")+g("a");
+    tr.querySelector(".sum").textContent=s;tr.querySelector(".imp").textContent=grade(s);
+  });
+  try{localStorage.setItem(KEY,JSON.stringify(read()))}catch(e){}
+}
+function load(){
+  try{const v=JSON.parse(localStorage.getItem(KEY));if(Array.isArray(v)&&v.length)return v}catch(e){}
+  return [{type:"PC",name:"att",purpose:"실습용 PC",zone:"내부망",os:"Ubuntu 22.04",mode:"Active",owner:"",c:2,i:2,a:2}];
+}
+const tb=document.querySelector("#t tbody");
+load().forEach(a=>tb.appendChild(row(a)));refresh();
+document.getElementById("add").onclick=()=>{tb.appendChild(row({type:"서버",name:"",purpose:"",zone:"내부망",os:"",mode:"Active",owner:"",c:2,i:2,a:2}));refresh()};
+document.getElementById("dl").onclick=()=>{
+  const b=new Blob([JSON.stringify(read(),null,2)],{type:"application/json"});
+  const u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download="assets.json";a.click();URL.revokeObjectURL(u);
+};
+</script>
+</body>
+</html>
