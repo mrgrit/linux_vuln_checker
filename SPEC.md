@@ -231,5 +231,5 @@ SUID 가 설정된 실행 파일은 누가 실행하든 파일 소유자(대개 
 
 ## 4. 출력 형식 (apps/CONVENTIONS.md "장 간 데이터 교환 형식")
 - `out/assets.json` = `[{"type","name","purpose","zone","os","mode","owner","c","i","a","importance"}]` (9장이 읽는다).
-- `out/report.json` = `{"host","generated"(ISO8601),"items":[{"id","category"("계정 관리"|"서비스 관리"|"파일 시스템"),"name","grade"("상"|"중"|"하"),"result"("양호"|"취약"|"확인 불가"|"해당 없음"),"evidence"}],"summary":{"<분류>":{"total","vuln","rate",...}}}`. 추가 키 `tool`, `totals` 는 보조 정보다.
-- `out/report.html` = 항목표 + 분야별 취약률(1-8) + 결과표(관리적 관점·기술적 관점 / 이행 여부 / 총평).
+- `out/report.json` = `{"host","generated"(ISO8601),"items":[{"id","category"("계정 관리"|"서비스 관리"|"파일 시스템"),"name","grade"("상"|"중"|"하"),"result"("양호"|"취약"|"확인 불가"|"해당 없음"),"evidence"}],"summary":{"<분류>":{"total","vuln","rate",...}}}`. 추가 키 `tool`, `totals` 는 보조 정보다. 판정이 취약인 항목에는 `remediation`(`summary`, `commands`)이 붙는다.
+- `out/report.html` = 항목표 + 분야별 취약률(1-8) + 결과표(관리적 관점·기술적 관점 / 이행 여부 / 총평) + 취약 항목 조치 방법(안내만 하며 도구는 시스템을 수정하지 않는다).

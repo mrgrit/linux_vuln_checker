@@ -485,6 +485,44 @@ META = [  # SPEC 1-4
  ("F-03","파일 시스템","/etc/hosts 파일 소유자 및 권한","상"),("F-04","파일 시스템","불필요한 SUID·SGID 파일","상"),
  ("F-05","파일 시스템","UMASK 설정","중"),("F-06","파일 시스템","root 홈·PATH 에 \".\" 금지","상"),
 ]
+REMEDY = {  # 취약 항목 조치 방법(안내만 한다. 이 도구는 시스템을 수정하지 않는다)
+ "U-01": ("/etc/ssh/sshd_config 에 PermitRootLogin no 를 설정한다. 주석(#)을 풀고 값을 no 로 바꾼다.",
+          "sudo sed -i 's/^#\\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config\nsudo sshd -t && sudo systemctl reload ssh"),
+ "U-02": ("pwquality 로 8자 이상 3종 이상(또는 10자 이상 2종 이상)을 강제한다.",
+          "sudo apt install libpam-pwquality\n# /etc/security/pwquality.conf\nminlen = 8\nminclass = 3"),
+ "U-03": ("PAM 에 pam_faillock 을 적용하고 deny 를 1~10 으로 둔다.",
+          "# /etc/security/faillock.conf\ndeny = 5\nunlock_time = 600\n# /etc/pam.d/common-auth 에 pam_faillock.so preauth / authfail 줄 추가\n# (설정 전 다른 로그인 세션을 열어 둬 잠기는 사고를 막는다)"),
+ "U-04": ("root 외 UID 0 계정은 삭제하거나 UID 를 바꾼다.",
+          "sudo usermod -u <새 UID> <계정>   # 또는 sudo userdel <계정>"),
+ "U-05": ("불필요 계정(lp·uucp·nuucp·games·news·gopher)의 셸을 nologin 으로 바꾸거나 삭제한다.",
+          "sudo usermod -s /usr/sbin/nologin <계정>   # 또는 sudo userdel <계정>"),
+ "U-06": ("/etc/login.defs 의 PASS_MAX_DAYS 를 90 이하로 설정한다(기존 계정은 chage 로 적용).",
+          "sudo sed -i 's/^PASS_MAX_DAYS.*/PASS_MAX_DAYS   90/' /etc/login.defs\nsudo chage -M 90 <계정>"),
+ "U-07": ("빈 비밀번호 계정은 비밀번호를 설정하거나 잠그고, 약한 해시 계정은 비밀번호를 다시 설정해 SHA-512/yescrypt 로 바꾼다.",
+          "sudo passwd -l <계정>   # 잠금\nsudo passwd <계정>      # 재설정(현재 해시 알고리즘으로 저장됨)"),
+ "S-01": ("finger 서비스를 끈다.",
+          "# /etc/xinetd.d/finger 에 disable = yes\nsudo systemctl restart xinetd\n# 또는 패키지 제거: sudo apt remove finger fingerd"),
+ "S-02": ("vsftpd 설정에서 익명 접속을 끈다.",
+          "# /etc/vsftpd.conf\nanonymous_enable=NO\nsudo systemctl restart vsftpd"),
+ "S-03": ("r 계열 서비스를 끄고 hosts.equiv·.rhosts 의 '+' 를 제거한다. 가능하면 패키지를 제거하고 SSH 를 쓴다.",
+          "# /etc/xinetd.d/{rsh,rlogin,rexec} 에 disable = yes\nsudo apt remove rsh-server\n# /etc/hosts.equiv, ~/.rhosts 에서 '+' 줄 삭제"),
+ "S-04": ("/etc/exports 에서 '*' 와 no_root_squash 를 없애고 허용 호스트를 지정한다.",
+          "# /etc/exports\n/share 192.168.0.0/24(ro,root_squash)\nsudo exportfs -ra"),
+ "S-05": ("echo·discard·daytime·chargen 을 끈다.",
+          "# /etc/xinetd.d/ 의 해당 파일에 disable = yes\nsudo systemctl restart xinetd"),
+ "F-01": ("/etc/passwd 를 root 소유, 644 이하로 맞춘다.",
+          "sudo chown root:root /etc/passwd\nsudo chmod 644 /etc/passwd"),
+ "F-02": ("/etc/shadow 를 root 소유, 600(또는 400)으로 맞춘다. Ubuntu 기본 640 root:shadow 도 교재 기준은 취약이다. shadow 그룹이 읽어야 하는 프로그램이 없는지 확인한 뒤 적용한다.",
+          "sudo chown root:root /etc/shadow\nsudo chmod 600 /etc/shadow"),
+ "F-03": ("/etc/hosts 를 root 소유, 644 이하로 맞춘다.",
+          "sudo chown root:root /etc/hosts\nsudo chmod 644 /etc/hosts"),
+ "F-04": ("목록 밖 SUID/SGID 파일은 필요 여부를 확인하고, 불필요하면 특수 권한을 제거한다. 필요하면 src/suid_allowlist.txt 에 근거와 함께 추가한다.",
+          "ls -l <파일>\nsudo chmod u-s,g-s <파일>"),
+ "F-05": ("UMASK 를 022 이상으로 설정한다.",
+          "# /etc/login.defs\nUMASK 022\n# /etc/profile 등에 umask 가 있으면 022 이상으로"),
+ "F-06": ("root 의 PATH 에서 '.' 과 빈 요소(::, 앞뒤 :)를 제거한다.",
+          "# 해당 파일(.bashrc, /etc/profile 등)의 PATH= 줄을 고친다\nexport PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"),
+}
 results = {}
 for line in open(res_path, encoding="utf-8"):
     p = line.rstrip("\n").split("\t", 2)
@@ -493,7 +531,10 @@ for line in open(res_path, encoding="utf-8"):
 items = []
 for id_, cat, name, grade in META:
     r, e = results.get(id_, ("확인 불가", "점검 결과 없음"))
-    items.append({"id": id_, "category": cat, "name": name, "grade": grade, "result": r, "evidence": e})
+    it = {"id": id_, "category": cat, "name": name, "grade": grade, "result": r, "evidence": e}
+    if r == "취약":
+        it["remediation"] = {"summary": REMEDY[id_][0], "commands": REMEDY[id_][1]}
+    items.append(it)
 
 def tally(sub):
     c = {k: sum(1 for i in sub if i["result"] == k) for k in ("양호","취약","확인 불가","해당 없음")}
@@ -520,6 +561,10 @@ srows = "".join(
   f'<td><b>{pct(s["rate"])}</b></td></tr>' for c, s in summary.items())
 srows += (f'<tr class="tot"><td>전체</td><td>{totals["total"]}</td><td>{totals["vuln"]}</td>'
           f'<td>{totals["unknown"]}</td><td>{totals["na"]}</td><td><b>{pct(totals["rate"])}</b></td></tr>')
+rem = "".join(
+  f'<div class="rem"><h3>{E(i["id"])} {E(i["name"])} <span class="bad">[{E(i["grade"])}]</span></h3>'
+  f'<p>{E(i["remediation"]["summary"])}</p><pre>{E(i["remediation"]["commands"])}</pre></div>'
+  for i in items if i["result"] == "취약") or '<p class="meta">취약 항목이 없습니다.</p>'
 tech_state = "미이행(취약 항목 존재)" if totals["vuln"] else ("부분 확인(확인 불가 존재)" if totals["unknown"] else "이행")
 vuln_ids = ", ".join(i["id"] for i in items if i["result"] == "취약") or "없음"
 unk_ids = ", ".join(i["id"] for i in items if i["result"] == "확인 불가") or "없음"
@@ -535,7 +580,9 @@ h1{{font-size:22px;margin:0 0 4px}}h2{{font-size:17px;margin:28px 0 8px}}.meta{{
 table{{border-collapse:collapse;width:100%}}th,td{{border:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}}
 th{{background:var(--head)}}.ev{{font-size:12px;color:var(--mut);word-break:break-word}}
 .ok{{color:var(--ok);font-weight:600}}.bad{{color:var(--bad);font-weight:600}}.unk{{color:var(--unk);font-weight:600}}.na{{color:var(--na)}}
-tr.tot td{{background:var(--head)}}.scroll{{overflow-x:auto}}
+tr.tot td{{background:var(--head)}}
+h3{{font-size:14px;margin:0 0 4px}}.rem{{border:1px solid var(--line);border-radius:6px;padding:10px 12px;margin:10px 0}}
+.rem p{{margin:4px 0}}pre{{background:var(--head);padding:8px;border-radius:4px;overflow-x:auto;margin:6px 0 0;font-size:12px}}.scroll{{overflow-x:auto}}
 </style></head><body>
 <h1>리눅스 보안 점검 결과서</h1>
 <div class="meta">호스트 {E(host)} · 점검 일시 {E(generated)} · 도구 check.sh (로컬 설치형, 읽기 전용) · <a href="assets.html">자산 관리 대장</a> · <a href="report.json">report.json</a></div>
@@ -547,6 +594,9 @@ tr.tot td{{background:var(--head)}}.scroll{{overflow-x:auto}}
 <div class="scroll"><table><tr><th>관점</th><th>이행 여부</th><th>총평</th></tr>
 <tr><td>관리적 관점</td><td>인터뷰 필요</td><td>정보보호 정책·절차는 스크립트로 확인할 수 없어 담당자 인터뷰(SPEC 1-6)로 별도 점검한다.</td></tr>
 <tr><td>기술적 관점</td><td>{E(tech_state)}</td><td>{E(comment)}</td></tr></table></div>
+<h2>4. 취약 항목 조치 방법</h2>
+<p class="meta">안내용이다. 이 도구는 시스템을 수정하지 않으므로 관리자가 영향을 확인한 뒤 직접 적용하고 재점검한다.</p>
+{rem}
 </body></html>"""
 with open(os.path.join(out, "report.html"), "w", encoding="utf-8") as f: f.write(doc)
 
